@@ -27,6 +27,18 @@ existing image will change its name to <none>:<none> and the newly built image
 will get the <target_name>:dockerfile_image name.
 
 The produced tar file is available at @<repo_name>//image:dockerfile_image.tar
+
+===========================================
+Patch #1 - Setting the build path directory
+# In WORKSPACE
+load("@io_bazel_rules_docker//contrib:dockerfile_build.bzl", "dockerfile_image")
+
+dockerfile_image(
+    name = "airflow_image_build",
+    build_path_reference = "//data_platform:BUILD", # Building the image from data_platform/
+    dockerfile = "//data_platform/data_services/airflow:airflow_build.dockerfile",
+)
+
 """
 
 def _docker(repository_ctx):
@@ -51,6 +63,12 @@ def _impl(repository_ctx):
 
     docker_path = _docker(repository_ctx)
     dockerfile_path = repository_ctx.path(repository_ctx.attr.dockerfile)
+    if repository_ctx.attr.build_path_reference:
+        build_path = repository_ctx.path(repository_ctx.attr.build_path_reference)
+        build_path = str(build_path.dirname)
+    else:
+        build_path = str(dockerfile_path.dirname)
+
     img_name = repository_ctx.name + ":dockerfile_image"
 
     build_args = []
@@ -72,7 +90,7 @@ def _impl(repository_ctx):
         str(dockerfile_path),
         "-t",
         img_name,
-        str(dockerfile_path.dirname),
+        build_path,
     ])
 
     if repository_ctx.attr.target:
@@ -109,6 +127,11 @@ dockerfile_image = repository_rule(
         "build_args": attr.string_dict(
             doc = "A map of args to pass to the --build-arg option in the " +
                   "`docker build` command.",
+        ),
+        "build_path_reference": attr.label(
+            allow_single_file = True,
+            doc = "Specify a reference filepath to get the parent directory " +
+                  "to start the build.",
         ),
         "docker_path": attr.string(
             doc = "The full path to the docker binary. If not specified, it " +
